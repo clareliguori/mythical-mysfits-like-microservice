@@ -1,0 +1,289 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This stack deploys the core network infrastructure and IAM resources
+             to be used for a service hosted in Amazon ECS using AWS Fargate.
+
+Parameters:
+  VPC:
+    Description: ID of the default VPC (or other VPC with public subnets)
+    Type: AWS::EC2::VPC::Id
+
+  Subnets:
+    Description: Public subnets for the Likes service
+    Type: List<AWS::EC2::Subnet::Id>
+
+Resources:
+  LikesService:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: mythical-mysfits-likes-microservice
+
+  MythicalEcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: mythical-mysfits-services
+
+  MythicalLikesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: mythical-mysfits-like-service
+      RetentionInDays: 30
+
+  MythicalLikesTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - EcsServiceRole
+      - ECSTaskRole
+      - MythicalLikesLogGroup
+      - MythicalDynamoTable
+    Properties:
+      Cpu: 256
+      ExecutionRoleArn: mythical-mysfits-likes-execution-role
+      Family: mythical-mysfits-likes
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: mythical-mysfits-likes-task-role
+      ContainerDefinitions:
+        - Name: likes-web-app
+          Image: nginx:latest
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: http
+          Environment:
+            - Name: DATABASE_TABLE_NAME
+              Value: mythical-mysfits-data
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: mythical-mysfits-like-service
+              awslogs-region: us-east-2
+              awslogs-stream-prefix: awslogs-mythicalmysfits-service
+          Essential: true
+
+  MythicalLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: mythical-mysfits-likes-service-alb-security-group
+      GroupDescription: Access to the load balancer
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+          # Allow access to ALB from anywhere on the internet on port 80
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0
+
+  MythicalLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: mythical-mysfits-likes-alb
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref MythicalLoadBalancerSecurityGroup
+      Subnets: !Ref Subnets
+
+  MythicalListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref MythicalLikesTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref MythicalLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  MythicalLikesTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 5
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      HealthCheckTimeoutSeconds: 4
+      TargetGroupAttributes:
+        - Key: 'deregistration_delay.timeout_seconds'
+          Value: 5
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+
+  MythicalLikesService:
+    Type: AWS::ECS::Service
+    DependsOn: MythicalListener
+    Properties:
+      ServiceName: mythical-mysfits-likes
+      Cluster: !Ref MythicalEcsCluster
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: 3
+      LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: likes-web-app
+          ContainerPort: 80
+          TargetGroupArn: !Ref MythicalLikesTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref FargateContainerSecurityGroup
+          Subnets: !Ref Subnets
+      TaskDefinition: !Ref MythicalLikesTaskDefinition
+
+  FargateContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: mythical-mysfits-likes-service-containers-security-group
+      GroupDescription: Access to the fargate containers
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+          # Allow access to Fargate containers from the load balancer on port 80
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            SourceSecurityGroupId: !Ref MythicalLoadBalancerSecurityGroup
+
+  EcsServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: mythical-mysfits-likes-execution-role
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ecs.amazonaws.com
+            - ecs-tasks.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Rules which allow ECS to attach network interfaces to instances
+              # on your behalf in order for awsvpc networking mode to work right
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+
+              # Rules which allow ECS to update load balancers on your behalf
+              # with the information sabout how to send traffic to your containers
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+
+              # Rules which allow ECS to run tasks that have IAM roles assigned to them.
+              - 'iam:PassRole'
+
+              # Rules that let ECS interact with container images.
+              - 'ecr:GetAuthorizationToken'
+              - 'ecr:BatchCheckLayerAvailability'
+              - 'ecr:GetDownloadUrlForLayer'
+              - 'ecr:BatchGetImage'
+
+              # Rules that let ECS create and push logs to CloudWatch.
+              - 'logs:DescribeLogStreams'
+              - 'logs:CreateLogStream'
+              - 'logs:CreateLogGroup'
+              - 'logs:PutLogEvents'
+
+            Resource: '*'
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: mythical-mysfits-likes-task-role
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - ecs-tasks.amazonaws.com
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                # Allow the ECS Tasks to download images from ECR
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+
+                # Allow the ECS tasks to upload logs to CloudWatch
+                - 'logs:CreateLogStream'
+                - 'logs:CreateLogGroup'
+                - 'logs:PutLogEvents'
+              Resource: '*'
+
+            - Effect: Allow
+              Action:
+                # Allows the ECS tasks to interact with only the MysfitsTable
+                # in DynamoDB
+                - 'dynamodb:Scan'
+                - 'dynamodb:Query'
+                - 'dynamodb:UpdateItem'
+                - 'dynamodb:GetItem'
+              Resource: !GetAtt MythicalDynamoTable.Arn
+
+  MythicalDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: mythical-mysfits-data
+      AttributeDefinitions:
+        - AttributeName: MysfitId
+          AttributeType: S
+        - AttributeName: GoodEvil
+          AttributeType: S
+        - AttributeName: LawChaos
+          AttributeType: S
+      GlobalSecondaryIndexes:
+        - IndexName: LawChaosIndex
+          KeySchema:
+            - AttributeName: LawChaos
+              KeyType: HASH
+            - AttributeName: MysfitId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+        - IndexName: GoodEvilIndex
+          KeySchema:
+            - AttributeName: GoodEvil
+              KeyType: HASH
+            - AttributeName: MysfitId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      KeySchema:
+        - AttributeName: MysfitId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+Outputs:
+  LoadBalancerDNS:
+    Description: The DNS for the load balancer
+    Value: !GetAtt MythicalLoadBalancer.DNSName
