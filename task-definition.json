@@ -1,0 +1,37 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "likes-web-app-container",
+      "image": "TODO FILL IN",
+      "environment": [
+        {
+          "name": "DATABASE_TABLE_NAME",
+          "value": "mythical-mysfits-data"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "mythical-mysfits-like-service",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "awslogs-mythicalmysfits-service"
+        }
+      },
+      "portMappings": [
+        {
+          "hostPort": 80,
+          "protocol": "tcp",
+          "containerPort": 80
+        }
+      ],
+      "essential": true
+    }
+  ],
+  "cpu": "256",
+  "memory": "512",
+  "family": "mythical-mysfits-likes",
+  "requiresCompatibilities": [ "FARGATE" ],
+  "executionRoleArn": "mythical-mysfits-likes-execution-role",
+  "taskRoleArn": "mythical-mysfits-likes-task-role",
+  "networkMode": "awsvpc"
+}

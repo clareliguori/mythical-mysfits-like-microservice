@@ -1,0 +1,50 @@
+on:
+  [push]
+
+name: Deploy
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1.0.0
+
+    - name: Configure AWS credentials
+      uses: aws/configure-aws-credentials-for-github-actions@master
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+
+    - name: Login ECR
+      id: login-ecr
+      uses: aws/amazon-ecr-login-for-github-actions@master
+
+    - name: Build, tag, and push image
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: mythical-mysfits-likes-microservice
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+    - name: Fill in the new image ID in the task definition
+      id: task-def
+      uses: aws/amazon-ecs-render-task-definition-for-github-actions@master
+      with:
+        task-definition: task-definition.json
+        container-name: likes-web-app-container
+        image: ${{ steps.build-image.outputs.image }}
+
+    - name: Deploy task definition
+      uses: aws/amazon-ecs-deploy-task-definition-for-github-actions@master
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: mythical-mysfits-likes
+        cluster: mythical-mysfits-services
+        wait-for-service-stability: true
