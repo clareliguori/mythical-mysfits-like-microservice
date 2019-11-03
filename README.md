@@ -21,9 +21,15 @@ aws cloudformation deploy \
 
 aws cloudformation describe-stacks --stack-name mythical-mysfits-core-infra | jq -r '[.Stacks[0].Outputs[] | {key: .OutputKey, value: .OutputValue}] | from_entries'
 
-./script/load-ddb
-
-
-
+./load-ddb
 ```
 
+## Run Locally
+
+```
+docker build -t likes-service .
+
+docker run -v ~/.aws/:/root/.aws/ -e AWS_DEFAULT_REGION=us-east-2 -e DATABASE_TABLE_NAME=mythical-mysfits-data -p 8080:80 likes-service
+
+http://localhost:8080
+```
