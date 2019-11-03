@@ -45,7 +45,7 @@ Resources:
         - FARGATE
       TaskRoleArn: mythical-mysfits-likes-task-role
       ContainerDefinitions:
-        - Name: likes-web-app
+        - Name: likes-web-app-container
           Image: nginx:latest
           PortMappings:
             - ContainerPort: 80
@@ -123,7 +123,7 @@ Resources:
       DesiredCount: 3
       LaunchType: FARGATE
       LoadBalancers:
-        - ContainerName: likes-web-app
+        - ContainerName: likes-web-app-container
           ContainerPort: 80
           TargetGroupArn: !Ref MythicalLikesTargetGroup
       NetworkConfiguration:

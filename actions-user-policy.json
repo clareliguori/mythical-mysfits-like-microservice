@@ -32,6 +32,17 @@
       "Resource":"*"
     },
     {
+      "Sid":"PassRolesInTaskDefinition",
+      "Effect":"Allow",
+      "Action":[
+        "iam:PassRole"
+      ],
+      "Resource":[
+        "arn:aws:iam::*:role/mythical-mysfits-likes-execution-role",
+        "arn:aws:iam::*:role/mythical-mysfits-likes-task-role"
+      ]
+    },
+    {
       "Sid":"DeployService",
       "Effect":"Allow",
       "Action":[
