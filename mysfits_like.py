@@ -20,7 +20,7 @@ SWAGGERUI = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
     config={
-        'APP_name': "Mythical Mysfits 'Likes' Microservice"
+        'app_name': "Mythical Mysfits 'Likes' Microservice"
     },
 )
 
@@ -34,7 +34,7 @@ def health_check_response():
 def like_mysfit(mysfit_id):
     response = increment_mysfit_likes(mysfit_id)
     flask_response = Response(response)
-    flask_response.headers["Content-Type"] = "APPlication/json"
+    flask_response.headers["Content-Type"] = "application/json"
     return flask_response
 
 def increment_mysfit_likes(mysfit_id):
