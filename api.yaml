@@ -1,0 +1,56 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: Mythical Mysfits 'Likes' Microservice
+servers:
+  - url: /
+paths:
+  /mysfits/{mysfitId}/like:
+    post:
+      summary: Like a mysfit
+      operationId: likeMysfit
+      tags:
+        - likes
+      parameters:
+        - name: mysfitId
+          in: path
+          required: true
+          description: The id of the mysfits to like
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mysfit"
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Mysfit:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        likes:
+          type: integer
+          format: int64
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
