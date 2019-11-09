@@ -31,6 +31,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /mysfits/{mysfitId}/unlike:
+    post:
+      summary: Unlike a mysfit
+      operationId: unlikeMysfit
+      tags:
+        - likes
+      parameters:
+        - name: mysfitId
+          in: path
+          required: true
+          description: The id of the mysfits to unlike
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mysfit"
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     Mysfit:

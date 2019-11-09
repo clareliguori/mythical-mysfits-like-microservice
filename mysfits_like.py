@@ -37,6 +37,13 @@ def like_mysfit(mysfit_id):
     flask_response.headers["Content-Type"] = "application/json"
     return flask_response
 
+@APP.route("/mysfits/<mysfit_id>/unlike", methods=['POST'])
+def unlike_mysfit(mysfit_id):
+    response = decrement_mysfit_likes(mysfit_id)
+    flask_response = Response(response)
+    flask_response.headers["Content-Type"] = "application/json"
+    return flask_response
+
 def increment_mysfit_likes(mysfit_id):
     CLIENT.update_item(
         TableName=TABLE,
@@ -46,6 +53,36 @@ def increment_mysfit_likes(mysfit_id):
             }
         },
         UpdateExpression="SET Likes = Likes + :n",
+        ExpressionAttributeValues={':n': {'N': '1'}}
+    )
+
+    response = CLIENT.get_item(
+        TableName=TABLE,
+        Key={
+            'MysfitId': {
+                'S': mysfit_id
+            }
+        }
+    )
+
+    item = response["Item"]
+
+    mysfit = {}
+    mysfit["id"] = item["MysfitId"]["S"]
+    mysfit["name"] = item["Name"]["S"]
+    mysfit["likes"] = item["Likes"]["N"]
+
+    return json.dumps(mysfit)
+
+def decrement_mysfit_likes(mysfit_id):
+    CLIENT.update_item(
+        TableName=TABLE,
+        Key={
+            'MysfitId': {
+                'S': mysfit_id
+            }
+        },
+        UpdateExpression="SET Likes = Likes - :n",
         ExpressionAttributeValues={':n': {'N': '1'}}
     )
 
