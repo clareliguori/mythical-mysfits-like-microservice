@@ -2,7 +2,7 @@
   "containerDefinitions": [
     {
       "name": "likes-web-app-container",
-      "image": "TODO FILL IN",
+      "image": "hello",
       "environment": [
         {
           "name": "DATABASE_TABLE_NAME",

@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - master
+      - try-formatting-secret
 
 name: Deploy
 
@@ -13,10 +13,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v1
 
+    - name: Print secret name
+      env:
+        SECRET_NAME: ${{ format('AWS_ACCESS_KEY_ID_{0}', github.actor) }}
+      run: echo "$SECRET_NAME"
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-access-key-id: ${{ secrets[format('AWS_ACCESS_KEY_ID_{0}', github.actor)] }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-2
 
